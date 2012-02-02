@@ -13,6 +13,7 @@ namespace JabbR.Client
         private readonly IHubProxy _chat;
         private readonly HubConnection _connection;
         private readonly string _url;
+        private int _initialized;
 
         public JabbRClient(string url)
         {
@@ -22,6 +23,18 @@ namespace JabbR.Client
         }
 
         public event Action<Message, string> MessageReceived;
+        public event Action<IEnumerable<string>> LoggedOn;
+        public event Action<IEnumerable<string>> LoggedOut;
+        public event Action<User, string> UserJoined;
+        public event Action<User, string> UserLeft;
+        public event Action<string> Kicked;
+        public event Action<string, string, string> PrivateMessage;
+        public event Action<User, string> UserTyping;
+
+        // Global
+        public event Action<string, int> RoomCountChanged;
+        public event Action<User> UserActivityChanged;
+        public event Action<IEnumerable<User>> UsersInactive;
 
         public ICredentials Credentials
         {
@@ -81,33 +94,6 @@ namespace JabbR.Client
                               .FastUnwrap();
         }
 
-        private void SubscribeToEvents()
-        {
-            Action<Message, string> messageReceived = MessageReceived;
-
-            if (messageReceived != null)
-            {
-                _chat.On<Message, string>(ClientEvents.AddMessage, (message, room) =>
-                {
-                    // Store the current sync context so we call the user code 
-                    // where it was meant to be raised
-                    var syncContext = SynchronizationContext.Current;
-                    Task.Factory.StartNew(() =>
-                    {
-                        if (syncContext != null)
-                        {
-                            syncContext.Post(_ => messageReceived(message, room), null);
-                        }
-                        else
-                        {
-                            messageReceived(message, room);
-                        }
-                    })
-                    .Catch();
-                });
-            }
-        }
-
         public Task<User> GetUserInfo()
         {
             return _chat.Invoke<User>("GetUserInfo");
@@ -120,11 +106,6 @@ namespace JabbR.Client
 
         public Task<bool> Send(string message, string room)
         {
-            if (message.StartsWith("/"))
-            {
-                throw new InvalidOperationException("Invoking commands not allowed. Use one of the methods to invoke commands.");
-            }
-
             return _chat.Invoke<bool>("Send", message, room);
         }
 
@@ -191,6 +172,143 @@ namespace JabbR.Client
         public void Disconnect()
         {
             _connection.Stop();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (Interlocked.Exchange(ref _initialized, 1) != 0)
+            {
+                return;
+            }
+
+            Action<Message, string> messageReceived = MessageReceived;
+
+            if (messageReceived != null)
+            {
+                _chat.On<Message, string>(ClientEvents.AddMessage, (message, room) =>
+                {
+                    ExecuteWithSyncContext(() => messageReceived(message, room));
+                });
+            }
+
+            Action<IEnumerable<string>> loggedOn = LoggedOn;
+
+            if (loggedOn != null)
+            {
+                _chat.On<IEnumerable<string>>(ClientEvents.LogOn, rooms =>
+                {
+                    ExecuteWithSyncContext(() => loggedOn(rooms));
+                });
+            }
+
+            Action<IEnumerable<string>> loggedOut = LoggedOut;
+
+            if (loggedOut != null)
+            {
+                _chat.On<IEnumerable<string>>(ClientEvents.LogOut, rooms =>
+                {
+                    ExecuteWithSyncContext(() => loggedOut(rooms));
+                });
+            }
+
+            Action<User, string> userJoined = UserJoined;
+
+            if (userJoined != null)
+            {
+                _chat.On<User, string>(ClientEvents.AddUser, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => userJoined(user, room));
+                });
+            }
+
+            Action<User, string> userLeft = UserLeft;
+
+            if (userLeft != null)
+            {
+                _chat.On<User, string>(ClientEvents.Leave, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => userLeft(user, room));
+                });
+            }
+
+            Action<string> kicked = Kicked;
+
+            if (kicked != null)
+            {
+                _chat.On<string>(ClientEvents.Kick, room =>
+                {
+                    ExecuteWithSyncContext(() => kicked(room));
+                });
+            }
+
+            Action<string, int> roomCountChanged = RoomCountChanged;
+
+            if (roomCountChanged != null)
+            {
+                _chat.On<string, int>(ClientEvents.UpdateRoomCount, (room, count) =>
+                {
+                    ExecuteWithSyncContext(() => roomCountChanged(room, count));
+                });
+            }
+
+            Action<User> userActivityChanged = UserActivityChanged;
+
+            if (userActivityChanged != null)
+            {
+                _chat.On<User>(ClientEvents.UpdateActivity, user =>
+                {
+                    ExecuteWithSyncContext(() => userActivityChanged(user));
+                });
+            }
+
+            Action<string, string, string> privateMessage = PrivateMessage;
+
+            if (privateMessage != null)
+            {
+                _chat.On<string, string, string>(ClientEvents.SendPrivateMessage, (from, to, message) =>
+                {
+                    ExecuteWithSyncContext(() => privateMessage(from, to, message));
+                });
+            }
+
+            Action<IEnumerable<User>> usersInactive = UsersInactive;
+
+            if (usersInactive != null)
+            {
+                _chat.On<IEnumerable<User>>(ClientEvents.MarkInactive, (users) =>
+                {
+                    ExecuteWithSyncContext(() => usersInactive(users));
+                });
+            }
+
+            Action<User, string> userTyping = UserTyping;
+
+            if (userTyping != null)
+            {
+                _chat.On<User, string>(ClientEvents.SetTyping, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => userTyping(user, room));
+                });
+            }
+        }
+
+        private static void ExecuteWithSyncContext(Action action)
+        {
+            // Store the current sync context so we call the user code 
+            // where it was meant to be raised
+            var syncContext = SynchronizationContext.Current;
+            Task.Factory.StartNew(() =>
+            {
+                if (syncContext != null)
+                {
+                    syncContext.Post(_ => action(), null);
+                }
+                else
+                {
+                    action();
+                }
+            })
+            .Catch();
         }
 
         private Task SendCommand(string command, params object[] args)

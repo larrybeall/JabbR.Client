@@ -18,11 +18,34 @@ namespace JabbR.Client.Sample
             // Launch the test room
             Process.Start(String.Format("{0}/#/rooms/{1}", server, roomName));
 
-
             // Subscribe to new messages
             client.MessageReceived += (message, room) =>
             {
                 Console.WriteLine("[{0}] {1}: {2}", message.When, message.User.Name, message.Content);
+            };
+
+            client.UserJoined += (user, room) =>
+            {
+                Console.WriteLine("{0} joined {1}", user.Name, room);
+            };
+
+            client.UserLeft += (user, room) =>
+            {
+                Console.WriteLine("{0} left {1}", user.Name, room);
+            };
+
+            client.LoggedOn += rooms =>
+            {
+                Console.WriteLine("Logged on successfully. You are currently in the following rooms:");
+                foreach (var room in rooms)
+                {
+                    Console.WriteLine(room);
+                }
+            };
+
+            client.PrivateMessage += (from, to, message) =>
+            {
+                Console.WriteLine("*PRIVATE* {0} -> {1} ", from, message);
             };
 
             // Connect to chat
