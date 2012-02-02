@@ -1,0 +1,8 @@
+[Oo]bj/
+[Bb]in/
+*.user
+*.suo
+*.cache
+packages/
+msbuild.log
+_Resharper*/
