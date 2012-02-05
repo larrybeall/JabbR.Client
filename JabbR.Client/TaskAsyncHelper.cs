@@ -40,6 +40,27 @@ namespace JabbR.Client
             return task;
         }
 
+        public static void ContinueWithNotRanToCompletion(this Task task, TaskCompletionSource<object> tcs)
+        {
+            ContinueWithNotRanToCompletion<object>(task, tcs);
+        }
+
+        public static void ContinueWithNotRanToCompletion<T>(this Task task, TaskCompletionSource<T> tcs)
+        {
+            task.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    tcs.SetException(t.Exception);
+                }
+                else if (t.IsCanceled)
+                {
+                    tcs.SetCanceled();
+                }
+            }, 
+            TaskContinuationOptions.NotOnRanToCompletion);
+        }
+
         public static void ContinueWith(this Task task, TaskCompletionSource<object> tcs)
         {
             task.ContinueWith(t =>

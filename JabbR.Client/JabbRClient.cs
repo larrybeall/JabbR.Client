@@ -14,7 +14,6 @@ namespace JabbR.Client
         private readonly HubConnection _connection;
         private readonly string _url;
         private int _initialized;
-        private int _connectInitialzed;
 
         public JabbRClient(string url)
         {
@@ -92,38 +91,42 @@ namespace JabbR.Client
 
             var tcs = new TaskCompletionSource<LogOnInfo>();
 
-            if (Interlocked.Exchange(ref _connectInitialzed, 1) == 0)
-            {
-                _chat.On<IEnumerable<Room>>(ClientEvents.LogOn, rooms =>
-                {
-                    tcs.SetResult(new LogOnInfo
-                    {
-                        Rooms = rooms,
-                        UserId = (string)_chat["id"]
-                    });
-                });
+            IDisposable logOn = null;
+            IDisposable userCreated = null;
 
-                _chat.On(ClientEvents.UserCreated, () =>
-                {
-                    tcs.SetResult(new LogOnInfo
-                    {
-                        UserId = (string)_chat["id"]
-                    });
-                });
-            }
-
-            connect().ContinueWith(task =>
+            Action<LogOnInfo> callback = logOnInfo =>
             {
-                if (task.IsCanceled)
+                if (userCreated != null)
                 {
-                    tcs.SetCanceled();
+                    userCreated.Dispose();
                 }
-                else if (task.IsFaulted)
+
+                if (logOn != null)
                 {
-                    tcs.SetException(task.Exception);
+                    logOn.Dispose();
                 }
-            },
-            TaskContinuationOptions.NotOnRanToCompletion);
+
+                tcs.SetResult(logOnInfo);
+            };
+
+            logOn = _chat.On<IEnumerable<Room>>(ClientEvents.LogOn, rooms =>
+            {
+                callback(new LogOnInfo
+                {
+                    Rooms = rooms,
+                    UserId = (string)_chat["id"]
+                });
+            });
+
+            userCreated = _chat.On(ClientEvents.UserCreated, () =>
+            {
+                callback(new LogOnInfo
+                {
+                    UserId = (string)_chat["id"]
+                });
+            });
+
+            connect().ContinueWithNotRanToCompletion(tcs);
 
             return tcs.Task;
         }
@@ -138,19 +141,32 @@ namespace JabbR.Client
             return _chat.Invoke("LogOut");
         }
 
-        public Task<bool> Send(string message, string room)
+        public Task<bool> Send(string message, string roomName)
         {
-            return _chat.Invoke<bool>("Send", message, room);
+            return _chat.Invoke<bool>("Send", message, roomName);
         }
 
-        public Task JoinRoom(string room)
+        public Task JoinRoom(string roomName)
         {
-            return SendCommand("join {0}", room);
+            var tcs = new TaskCompletionSource<object>();
+
+            IDisposable joinRoom = null;
+
+            joinRoom = _chat.On<Room>(ClientEvents.JoinRoom, room =>
+            {
+                joinRoom.Dispose();
+
+                tcs.SetResult(null);
+            });
+
+            SendCommand("join {0}", roomName).ContinueWithNotRanToCompletion(tcs);
+
+            return tcs.Task;
         }
 
-        public Task LeaveRoom(string room)
+        public Task LeaveRoom(string roomName)
         {
-            return SendCommand("leave {0}", room);
+            return SendCommand("leave {0}", roomName);
         }
 
         public Task SetFlag(string countryCode)
@@ -168,9 +184,9 @@ namespace JabbR.Client
             return SendCommand("msg {0} {1}", userName, message);
         }
 
-        public Task Kick(string userName, string room)
+        public Task Kick(string userName, string roomName)
         {
-            return SendCommand("kick {0} {1}", userName, room);
+            return SendCommand("kick {0} {1}", userName, roomName);
         }
 
         public Task ChangeName(string oldName, string newName)
@@ -183,9 +199,9 @@ namespace JabbR.Client
             return _chat.Invoke<bool>("CheckStatus");
         }
 
-        public Task SetTyping(string room)
+        public Task SetTyping(string roomName)
         {
-            return _chat.Invoke("Typing", room);
+            return _chat.Invoke("Typing", roomName);
         }
 
         public Task<IEnumerable<Message>> GetPreviousMessages(string fromId)

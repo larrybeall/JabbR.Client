@@ -13,6 +13,7 @@
         public static readonly string UpdateActivity = "updateActivity";
         public static readonly string MarkInactive = "markInactive";
         public static readonly string SendPrivateMessage = "sendPrivateMessage";
-        public static readonly string SetTyping = "setTyping"; 
+        public static readonly string SetTyping = "setTyping";
+        public static readonly string JoinRoom = "joinRoom";
     }
 }
