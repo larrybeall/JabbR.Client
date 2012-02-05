@@ -64,8 +64,15 @@ namespace JabbR.Client
             _chat["id"] = userId;
 
             return DoConnect(() => _connection.Start()
-                                              .Then(() => _chat.Invoke<bool>("Join"))
-                                              .FastUnwrap());
+                                              .Then(() => _chat.Invoke<bool>("Join")
+                                                               .Then(success =>
+                                                               {
+                                                                   if (!success)
+                                                                   {
+                                                                       throw new InvalidOperationException("Unknown user id.");
+                                                                   }
+                                                                   return TaskAsyncHelper.Empty;
+                                                               }).FastUnwrap()).FastUnwrap());
         }
 
         public Task<LogOnInfo> Connect(string name, string password)
