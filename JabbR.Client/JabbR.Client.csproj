@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="ClientEvents.cs" />
     <Compile Include="JabbRClient.cs" />
+    <Compile Include="Models\LogOnInfo.cs" />
     <Compile Include="Models\Message.cs" />
     <Compile Include="Models\Room.cs" />
     <Compile Include="Models\User.cs" />

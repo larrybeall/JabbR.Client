@@ -16,7 +16,7 @@ namespace JabbR.Client.Sample
             var client = new JabbRClient("http://jabbr-staging.apphb.com/");
 
             // Launch the test room
-            Process.Start(String.Format("{0}/#/rooms/{1}", server, roomName));
+            Process.Start(String.Format("{0}#/rooms/{1}", server, roomName));
 
             // Subscribe to new messages
             client.MessageReceived += (message, room) =>
@@ -34,22 +34,22 @@ namespace JabbR.Client.Sample
                 Console.WriteLine("{0} left {1}", user.Name, room);
             };
 
-            client.LoggedOn += rooms =>
-            {
-                Console.WriteLine("Logged on successfully. You are currently in the following rooms:");
-                foreach (var room in rooms)
-                {
-                    Console.WriteLine(room);
-                }
-            };
-
             client.PrivateMessage += (from, to, message) =>
             {
                 Console.WriteLine("*PRIVATE* {0} -> {1} ", from, message);
             };
 
             // Connect to chat
-            client.Connect(userName, password).Wait();
+            var info = client.Connect(userName, password).Result;
+
+            Console.WriteLine("Logged on successfully. You are currently in the following rooms:");
+            foreach (var room in info.Rooms)
+            {
+                Console.WriteLine(room.Name);
+                Console.WriteLine(room.Private);
+            }
+
+            Console.WriteLine("User id is {0}. Don't share this!", info.UserId);
 
             // Get my user info
             User myInfo = client.GetUserInfo().Result;

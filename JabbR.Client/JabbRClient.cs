@@ -14,6 +14,7 @@ namespace JabbR.Client
         private readonly HubConnection _connection;
         private readonly string _url;
         private int _initialized;
+        private int _connectInitialzed;
 
         public JabbRClient(string url)
         {
@@ -23,7 +24,6 @@ namespace JabbR.Client
         }
 
         public event Action<Message, string> MessageReceived;
-        public event Action<IEnumerable<string>> LoggedOn;
         public event Action<IEnumerable<string>> LoggedOut;
         public event Action<User, string> UserJoined;
         public event Action<User, string> UserLeft;
@@ -60,38 +60,72 @@ namespace JabbR.Client
             }
         }
 
-        public string UserId
+        public Task<LogOnInfo> Connect(string userId)
         {
-            get
-            {
-                return (string)_chat["id"];
-            }
-            set
-            {
-                _chat["id"] = value;
-            }
+            _chat["id"] = userId;
+
+            return DoConnect(() => _connection.Start()
+                                              .Then(() => _chat.Invoke<bool>("Join"))
+                                              .FastUnwrap());
         }
 
-        public Task Connect(string name, string password)
+        public Task<LogOnInfo> Connect(string name, string password)
+        {
+            return DoConnect(() => _connection.Start()
+                                              .Then(() =>
+                                              {
+                                                  return _chat.Invoke<bool>("Join").Then(success =>
+                                                  {
+                                                      if (!success)
+                                                      {
+                                                          return SendCommand("nick {0} {1}", name, password);
+                                                      }
+                                                      return TaskAsyncHelper.Empty;
+                                                  }).FastUnwrap();
+
+                                              }).FastUnwrap());
+        }
+
+        private Task<LogOnInfo> DoConnect(Func<Task> connect)
         {
             SubscribeToEvents();
 
-            return _connection.Start()
-                              .Then(() =>
-                              {
-                                  return _chat.Invoke<bool>("Join")
-                                              .Then(success =>
-                                              {
-                                                  if (!success)
-                                                  {
-                                                      return SendCommand("nick {0} {1}", name, password);
-                                                  }
+            var tcs = new TaskCompletionSource<LogOnInfo>();
 
-                                                  return TaskAsyncHelper.Empty;
-                                              })
-                                              .FastUnwrap();
-                              })
-                              .FastUnwrap();
+            if (Interlocked.Exchange(ref _connectInitialzed, 1) == 0)
+            {
+                _chat.On<IEnumerable<Room>>(ClientEvents.LogOn, rooms =>
+                {
+                    tcs.SetResult(new LogOnInfo
+                    {
+                        Rooms = rooms,
+                        UserId = (string)_chat["id"]
+                    });
+                });
+
+                _chat.On(ClientEvents.UserCreated, () =>
+                {
+                    tcs.SetResult(new LogOnInfo
+                    {
+                        UserId = (string)_chat["id"]
+                    });
+                });
+            }
+
+            connect().ContinueWith(task =>
+            {
+                if (task.IsCanceled)
+                {
+                    tcs.SetCanceled();
+                }
+                else if (task.IsFaulted)
+                {
+                    tcs.SetException(task.Exception);
+                }
+            },
+            TaskContinuationOptions.NotOnRanToCompletion);
+
+            return tcs.Task;
         }
 
         public Task<User> GetUserInfo()
@@ -188,16 +222,6 @@ namespace JabbR.Client
                 _chat.On<Message, string>(ClientEvents.AddMessage, (message, room) =>
                 {
                     ExecuteWithSyncContext(() => messageReceived(message, room));
-                });
-            }
-
-            Action<IEnumerable<string>> loggedOn = LoggedOn;
-
-            if (loggedOn != null)
-            {
-                _chat.On<IEnumerable<string>>(ClientEvents.LogOn, rooms =>
-                {
-                    ExecuteWithSyncContext(() => loggedOn(rooms));
                 });
             }
 
