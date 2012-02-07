@@ -37,72 +37,87 @@ namespace JabbR.Client.Sample
             };
 
             // Connect to chat
-            LogOnInfo info = client.Connect(userName, password).Result;
-
-            Console.WriteLine("Logged on successfully. You are currently in the following rooms:");
-            foreach (var room in info.Rooms)
+            client.Connect(userName, password).ContinueWith(task =>
             {
-                Console.WriteLine(room.Name);
-                Console.WriteLine(room.Private);
-            }
+                LogOnInfo info = task.Result;
 
-            Console.WriteLine("User id is {0}. Don't share this!", info.UserId);
 
-            Console.WriteLine();
-
-            // Get my user info
-            User myInfo = client.GetUserInfo().Result;
-
-            Console.WriteLine(myInfo.Name);
-            Console.WriteLine(myInfo.LastActivity);
-            Console.WriteLine(myInfo.Status);
-            Console.WriteLine(myInfo.Country);
-
-            // Join a room called test
-            client.JoinRoom(roomName).Wait();
-
-            client.JoinRoom("test").Wait();
-
-            Console.WriteLine();
-
-            // Get info about the test room
-            Room roomInfo = client.GetRoomInfo(roomName).Result;
-            Console.WriteLine("Users");
-
-            foreach (var u in roomInfo.Users)
-            {
-                Console.WriteLine(u.Name);
-            }
-
-            Console.WriteLine();
-
-            foreach (var u in roomInfo.Users)
-            {
-                if (u.Name != userName)
+                Console.WriteLine("Logged on successfully. You are currently in the following rooms:");
+                foreach (var room in info.Rooms)
                 {
-                    client.SendPrivateMessage(u.Name, "hey there, this is private right?").Wait();
+                    Console.WriteLine(room.Name);
+                    Console.WriteLine(room.Private);
                 }
-            }
 
-            // Set the flag
-            client.SetFlag("bb").Wait();
+                Console.WriteLine("User id is {0}. Don't share this!", info.UserId);
 
-            // Set the user note
-            client.SetNote("This is testing a note").Wait();
+                Console.WriteLine();
 
-            // Mark the client as typing
-            client.SetTyping(roomName).Wait();
+                // Get my user info
+                User myInfo = client.GetUserInfo().Result;
 
-            // Clear the note
-            client.SetNote(null).Wait();
+                Console.WriteLine(myInfo.Name);
+                Console.WriteLine(myInfo.LastActivity);
+                Console.WriteLine(myInfo.Status);
+                Console.WriteLine(myInfo.Country);
 
-            // Say hello to the room
-            client.Send("Hello world", roomName).Wait();
+                
+                client.JoinRoom("test");
 
-            Console.WriteLine("Press any key to leave the room and disconnect");
-            Console.Read();
-            client.LeaveRoom(roomName).Wait();
-            client.Disconnect();
+                Console.WriteLine();
+
+                // Join a room called test
+                client.JoinRoom(roomName).ContinueWith(_ =>
+                {
+                    // Get info about the test room
+                    client.GetRoomInfo(roomName).ContinueWith(t =>
+                    {
+                        Room roomInfo = t.Result;
+
+                        Console.WriteLine("Users");
+
+                        foreach (var u in roomInfo.Users)
+                        {
+                            Console.WriteLine(u.Name);
+                        }
+
+                        Console.WriteLine();
+
+                        foreach (var u in roomInfo.Users)
+                        {
+                            if (u.Name != userName)
+                            {
+                                client.SendPrivateMessage(u.Name, "hey there, this is private right?");
+                            }
+                        }
+
+                    });
+                });
+
+                // Set the flag
+                client.SetFlag("bb");
+
+                // Set the user note
+                client.SetNote("This is testing a note");
+
+                // Mark the client as typing
+                client.SetTyping(roomName);
+
+                // Clear the note
+                client.SetNote(null);
+
+                // Say hello to the room
+                client.Send("Hello world", roomName);
+
+                Console.WriteLine("Press any key to leave the room and disconnect");
+                Console.Read();
+                client.LeaveRoom(roomName).ContinueWith(_ =>
+                {
+                    client.Disconnect();
+                });
+            });
+
+            Console.ReadKey();
         }
     }
 }
