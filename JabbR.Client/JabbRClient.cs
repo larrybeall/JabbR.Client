@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using JabbR.Client.Models;
 using SignalR.Client.Hubs;
+using SignalR.Client.Transports;
 
 namespace JabbR.Client
 {
@@ -31,7 +32,7 @@ namespace JabbR.Client
         public event Action<User, string> UserTyping;
 
         // Global
-        public event Action<string, int> RoomCountChanged;
+        public event Action<Room, int> RoomCountChanged;
         public event Action<User> UserActivityChanged;
         public event Action<IEnumerable<User>> UsersInactive;
 
@@ -63,33 +64,48 @@ namespace JabbR.Client
         {
             _chat["id"] = userId;
 
-            return DoConnect(() => _connection.Start()
-                                              .Then(() => _chat.Invoke<bool>("Join")
-                                                               .Then(success =>
-                                                               {
-                                                                   if (!success)
-                                                                   {
-                                                                       throw new InvalidOperationException("Unknown user id.");
-                                                                   }
-                                                                   return TaskAsyncHelper.Empty;
-                                                               }).FastUnwrap()).FastUnwrap());
+            return DoConnect(() => Start()
+                                        .Then(() => _chat.Invoke<bool>("Join")
+                                                        .Then(success =>
+                                                        {
+                                                            if (!success)
+                                                            {
+                                                                throw new InvalidOperationException("Unknown user id.");
+                                                            }
+                                                            return TaskAsyncHelper.Empty;
+                                                        }).FastUnwrap()).FastUnwrap());
         }
 
         public Task<LogOnInfo> Connect(string name, string password)
         {
-            return DoConnect(() => _connection.Start()
-                                              .Then(() =>
-                                              {
-                                                  return _chat.Invoke<bool>("Join").Then(success =>
-                                                  {
-                                                      if (!success)
-                                                      {
-                                                          return SendCommand("nick {0} {1}", name, password);
-                                                      }
-                                                      return TaskAsyncHelper.Empty;
-                                                  }).FastUnwrap();
+            return DoConnect(() => Start()
+                                        .Then(() =>
+                                        {
+                                            return _chat.Invoke<bool>("Join").Then(success =>
+                                            {
+                                                if (!success)
+                                                {
+                                                    return SendCommand("nick {0} {1}", name, password);
+                                                }
+                                                return TaskAsyncHelper.Empty;
+                                            }).FastUnwrap();
 
-                                              }).FastUnwrap());
+                                        }).FastUnwrap());
+        }
+
+        private Task Start()
+        {
+            return _connection.Start(CreateTransport());
+        }
+
+        private IClientTransport CreateTransport()
+        {
+            return OnCreateTransport() ?? new AutoTransport();
+        }
+
+        protected virtual IClientTransport OnCreateTransport()
+        {
+            return null;
         }
 
         private Task<LogOnInfo> DoConnect(Func<Task> connect)
@@ -288,11 +304,11 @@ namespace JabbR.Client
                 });
             }
 
-            Action<string, int> roomCountChanged = RoomCountChanged;
+            Action<Room, int> roomCountChanged = RoomCountChanged;
 
             if (roomCountChanged != null)
             {
-                _chat.On<string, int>(ClientEvents.UpdateRoomCount, (room, count) =>
+                _chat.On<Room, int>(ClientEvents.UpdateRoomCount, (room, count) =>
                 {
                     ExecuteWithSyncContext(() => roomCountChanged(room, count));
                 });
