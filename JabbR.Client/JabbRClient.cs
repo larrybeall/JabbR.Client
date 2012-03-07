@@ -30,6 +30,12 @@ namespace JabbR.Client
         public event Action<string> Kicked;
         public event Action<string, string, string> PrivateMessage;
         public event Action<User, string> UserTyping;
+        public event Action<User, string> GravatarChanged;
+        public event Action<string, string, string> MeMessageReceived;
+        public event Action<string, User, string> UsernameChanged;
+        public event Action<User, string> NoteChanged;
+        public event Action<User, string> FlagChanged;
+        public event Action<Room> TopicChanged;
 
         // Global
         public event Action<Room, int> RoomCountChanged;
@@ -351,6 +357,66 @@ namespace JabbR.Client
                 _chat.On<User, string>(ClientEvents.SetTyping, (user, room) =>
                 {
                     ExecuteWithSyncContext(() => userTyping(user, room));
+                });
+            }
+
+            Action<User, string> gravatarChanged = GravatarChanged;
+
+            if(gravatarChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.GravatarChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => gravatarChanged(user, room));
+                });
+            }
+
+            Action<string, string, string> meMessageReceived = MeMessageReceived;
+
+            if(meMessageReceived != null)
+            {
+                _chat.On<string, string, string>(ClientEvents.MeMessageReceived, (user, content, room) =>
+                {
+                    ExecuteWithSyncContext(() => meMessageReceived(user, content, room));
+                });
+            }
+
+            Action<string, User, string> usernameChanged = UsernameChanged;
+
+            if(usernameChanged != null)
+            {
+                _chat.On<string, User, string>(ClientEvents.UsernameChanged, (oldUserName, user, room) =>
+                {
+                    ExecuteWithSyncContext(() => usernameChanged(oldUserName, user, room));
+                });
+            }
+
+            Action<User, string> noteChanged = NoteChanged;
+
+            if(noteChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                });
+            }
+
+            Action<User, string> flagChanged = FlagChanged;
+
+            if(noteChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                });
+            }
+            
+            Action<Room> topicChanged = TopicChanged;
+
+            if (topicChanged != null)
+            {
+                _chat.On<Room>(ClientEvents.TopicChanged, (room) =>
+                {
+                    ExecuteWithSyncContext(() => topicChanged(room));
                 });
             }
         }

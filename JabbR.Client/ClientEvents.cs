@@ -15,5 +15,12 @@
         public static readonly string SendPrivateMessage = "sendPrivateMessage";
         public static readonly string SetTyping = "setTyping";
         public static readonly string JoinRoom = "joinRoom";
+        // start of new  events
+        public static readonly string GravatarChanged = "changeGravatar";
+        public static readonly string MeMessageReceived = "sendMeMessage";
+        public static readonly string UsernameChanged = "changeUserName";
+        public static readonly string NoteChanged = "changeNote";
+        public static readonly string FlagChanged = "changeFlag";
+        public static readonly string TopicChanged = "changeTopic";
     }
 }
