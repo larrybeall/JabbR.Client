@@ -36,6 +36,8 @@ namespace JabbR.Client
         public event Action<User, string> NoteChanged;
         public event Action<User, string> FlagChanged;
         public event Action<Room> TopicChanged;
+        public event Action<User, string> OwnerAdded;
+        public event Action<User, string> OwnerRemoved;
 
         // Global
         public event Action<Room, int> RoomCountChanged;
@@ -417,6 +419,26 @@ namespace JabbR.Client
                 _chat.On<Room>(ClientEvents.TopicChanged, (room) =>
                 {
                     ExecuteWithSyncContext(() => topicChanged(room));
+                });
+            }
+
+            Action<User, string> ownerAdded = OwnerAdded;
+
+            if (ownerAdded != null)
+            {
+                _chat.On<User, string>(ClientEvents.OwnerAdded, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => ownerAdded(user, room));
+                });
+            }
+
+            Action<User, string> ownerRemoved = OwnerRemoved;
+
+            if (ownerRemoved != null)
+            {
+                _chat.On<User, string>(ClientEvents.OwnerRemoved, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => ownerRemoved(user, room));
                 });
             }
         }
