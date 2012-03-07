@@ -13,14 +13,20 @@ namespace JabbR.Client
     {
         private readonly IHubProxy _chat;
         private readonly HubConnection _connection;
+        private readonly IClientTransport _clientTransport;
         private readonly string _url;
         private int _initialized;
 
         public JabbRClient(string url)
+            : this(url, null)
+        {}
+
+        public JabbRClient(string url, IClientTransport transport)
         {
             _url = url;
             _connection = new HubConnection(url);
             _chat = _connection.CreateProxy("JabbR.Chat");
+            _clientTransport = transport ?? new AutoTransport();
         }
 
         public event Action<Message, string> MessageReceived;
@@ -72,48 +78,33 @@ namespace JabbR.Client
         {
             _chat["id"] = userId;
 
-            return DoConnect(() => Start()
-                                        .Then(() => _chat.Invoke<bool>("Join")
-                                                        .Then(success =>
-                                                        {
-                                                            if (!success)
-                                                            {
-                                                                throw new InvalidOperationException("Unknown user id.");
-                                                            }
-                                                            return TaskAsyncHelper.Empty;
-                                                        }).FastUnwrap()).FastUnwrap());
+            return DoConnect(() => _connection.Start(_clientTransport)
+                                       .Then(() => _chat.Invoke<bool>("Join")
+                                                       .Then(success =>
+                                                       {
+                                                           if (!success)
+                                                           {
+                                                               throw new InvalidOperationException("Unknown user id.");
+                                                           }
+                                                           return TaskAsyncHelper.Empty;
+                                                       }).FastUnwrap()).FastUnwrap());
         }
 
         public Task<LogOnInfo> Connect(string name, string password)
         {
-            return DoConnect(() => Start()
-                                        .Then(() =>
-                                        {
-                                            return _chat.Invoke<bool>("Join").Then(success =>
-                                            {
-                                                if (!success)
-                                                {
-                                                    return SendCommand("nick {0} {1}", name, password);
-                                                }
-                                                return TaskAsyncHelper.Empty;
-                                            }).FastUnwrap();
+            return DoConnect(() => _connection.Start(_clientTransport)
+                                       .Then(() =>
+                                       {
+                                           return _chat.Invoke<bool>("Join").Then(success =>
+                                           {
+                                               if (!success)
+                                               {
+                                                   return SendCommand("nick {0} {1}", name, password);
+                                               }
+                                               return TaskAsyncHelper.Empty;
+                                           }).FastUnwrap();
 
-                                        }).FastUnwrap());
-        }
-
-        private Task Start()
-        {
-            return _connection.Start(CreateTransport());
-        }
-
-        private IClientTransport CreateTransport()
-        {
-            return OnCreateTransport() ?? new AutoTransport();
-        }
-
-        protected virtual IClientTransport OnCreateTransport()
-        {
-            return null;
+                                       }).FastUnwrap());
         }
 
         private Task<LogOnInfo> DoConnect(Func<Task> connect)
