@@ -19,7 +19,7 @@ namespace JabbR.Client
 
         public JabbRClient(string url)
             : this(url, null)
-        {}
+        { }
 
         public JabbRClient(string url, IClientTransport transport)
         {
@@ -79,32 +79,31 @@ namespace JabbR.Client
             _chat["id"] = userId;
 
             return DoConnect(() => _connection.Start(_clientTransport)
-                                       .Then(() => _chat.Invoke<bool>("Join")
-                                                       .Then(success =>
-                                                       {
-                                                           if (!success)
-                                                           {
-                                                               throw new InvalidOperationException("Unknown user id.");
-                                                           }
-                                                           return TaskAsyncHelper.Empty;
-                                                       }).FastUnwrap()).FastUnwrap());
+                                              .Then(() => _chat.Invoke<bool>("Join")
+                                                               .Then(success =>
+                                                               {
+                                                                   if (!success)
+                                                                   {
+                                                                       throw new InvalidOperationException("Unknown user id.");
+                                                                   }
+                                                               })));
         }
 
         public Task<LogOnInfo> Connect(string name, string password)
         {
             return DoConnect(() => _connection.Start(_clientTransport)
-                                       .Then(() =>
-                                       {
-                                           return _chat.Invoke<bool>("Join").Then(success =>
-                                           {
-                                               if (!success)
-                                               {
-                                                   return SendCommand("nick {0} {1}", name, password);
-                                               }
-                                               return TaskAsyncHelper.Empty;
-                                           }).FastUnwrap();
+                                              .Then(() =>
+                                              {
+                                                  return _chat.Invoke<bool>("Join").Then(success =>
+                                                  {
+                                                      if (!success)
+                                                      {
+                                                          return SendCommand("nick {0} {1}", name, password);
+                                                      }
 
-                                       }).FastUnwrap());
+                                                      return TaskAsyncHelper.Empty;
+                                                  });
+                                              }));
         }
 
         private Task<LogOnInfo> DoConnect(Func<Task> connect)
@@ -148,7 +147,7 @@ namespace JabbR.Client
                 });
             });
 
-            connect().ContinueWithNotRanToCompletion(tcs);
+            connect().ContinueWithNotComplete(tcs);
 
             return tcs.Task;
         }
@@ -181,7 +180,7 @@ namespace JabbR.Client
                 tcs.SetResult(null);
             });
 
-            SendCommand("join {0}", roomName).ContinueWithNotRanToCompletion(tcs);
+            SendCommand("join {0}", roomName).ContinueWithNotComplete(tcs);
 
             return tcs.Task;
         }
@@ -259,7 +258,7 @@ namespace JabbR.Client
             {
                 _chat.On<Message, string>(ClientEvents.AddMessage, (message, room) =>
                 {
-                    ExecuteWithSyncContext(() => messageReceived(message, room));
+                    Execute(() => messageReceived(message, room));
                 });
             }
 
@@ -269,7 +268,7 @@ namespace JabbR.Client
             {
                 _chat.On<IEnumerable<string>>(ClientEvents.LogOut, rooms =>
                 {
-                    ExecuteWithSyncContext(() => loggedOut(rooms));
+                    Execute(() => loggedOut(rooms));
                 });
             }
 
@@ -279,7 +278,7 @@ namespace JabbR.Client
             {
                 _chat.On<User, string>(ClientEvents.AddUser, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => userJoined(user, room));
+                    Execute(() => userJoined(user, room));
                 });
             }
 
@@ -289,7 +288,7 @@ namespace JabbR.Client
             {
                 _chat.On<User, string>(ClientEvents.Leave, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => userLeft(user, room));
+                    Execute(() => userLeft(user, room));
                 });
             }
 
@@ -299,7 +298,7 @@ namespace JabbR.Client
             {
                 _chat.On<string>(ClientEvents.Kick, room =>
                 {
-                    ExecuteWithSyncContext(() => kicked(room));
+                    Execute(() => kicked(room));
                 });
             }
 
@@ -309,7 +308,7 @@ namespace JabbR.Client
             {
                 _chat.On<Room, int>(ClientEvents.UpdateRoomCount, (room, count) =>
                 {
-                    ExecuteWithSyncContext(() => roomCountChanged(room, count));
+                    Execute(() => roomCountChanged(room, count));
                 });
             }
 
@@ -319,7 +318,7 @@ namespace JabbR.Client
             {
                 _chat.On<User>(ClientEvents.UpdateActivity, user =>
                 {
-                    ExecuteWithSyncContext(() => userActivityChanged(user));
+                    Execute(() => userActivityChanged(user));
                 });
             }
 
@@ -329,7 +328,7 @@ namespace JabbR.Client
             {
                 _chat.On<string, string, string>(ClientEvents.SendPrivateMessage, (from, to, message) =>
                 {
-                    ExecuteWithSyncContext(() => privateMessage(from, to, message));
+                    Execute(() => privateMessage(from, to, message));
                 });
             }
 
@@ -339,7 +338,7 @@ namespace JabbR.Client
             {
                 _chat.On<IEnumerable<User>>(ClientEvents.MarkInactive, (users) =>
                 {
-                    ExecuteWithSyncContext(() => usersInactive(users));
+                    Execute(() => usersInactive(users));
                 });
             }
 
@@ -349,67 +348,67 @@ namespace JabbR.Client
             {
                 _chat.On<User, string>(ClientEvents.SetTyping, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => userTyping(user, room));
+                    Execute(() => userTyping(user, room));
                 });
             }
 
             Action<User, string> gravatarChanged = GravatarChanged;
 
-            if(gravatarChanged != null)
+            if (gravatarChanged != null)
             {
                 _chat.On<User, string>(ClientEvents.GravatarChanged, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => gravatarChanged(user, room));
+                    Execute(() => gravatarChanged(user, room));
                 });
             }
 
             Action<string, string, string> meMessageReceived = MeMessageReceived;
 
-            if(meMessageReceived != null)
+            if (meMessageReceived != null)
             {
                 _chat.On<string, string, string>(ClientEvents.MeMessageReceived, (user, content, room) =>
                 {
-                    ExecuteWithSyncContext(() => meMessageReceived(user, content, room));
+                    Execute(() => meMessageReceived(user, content, room));
                 });
             }
 
             Action<string, User, string> usernameChanged = UsernameChanged;
 
-            if(usernameChanged != null)
+            if (usernameChanged != null)
             {
                 _chat.On<string, User, string>(ClientEvents.UsernameChanged, (oldUserName, user, room) =>
                 {
-                    ExecuteWithSyncContext(() => usernameChanged(oldUserName, user, room));
+                    Execute(() => usernameChanged(oldUserName, user, room));
                 });
             }
 
             Action<User, string> noteChanged = NoteChanged;
 
-            if(noteChanged != null)
+            if (noteChanged != null)
             {
                 _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                    Execute(() => noteChanged(user, room));
                 });
             }
 
             Action<User, string> flagChanged = FlagChanged;
 
-            if(noteChanged != null)
+            if (noteChanged != null)
             {
                 _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                    Execute(() => noteChanged(user, room));
                 });
             }
-            
+
             Action<Room> topicChanged = TopicChanged;
 
             if (topicChanged != null)
             {
                 _chat.On<Room>(ClientEvents.TopicChanged, (room) =>
                 {
-                    ExecuteWithSyncContext(() => topicChanged(room));
+                    Execute(() => topicChanged(room));
                 });
             }
 
@@ -419,7 +418,7 @@ namespace JabbR.Client
             {
                 _chat.On<User, string>(ClientEvents.OwnerAdded, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => ownerAdded(user, room));
+                    Execute(() => ownerAdded(user, room));
                 });
             }
 
@@ -429,28 +428,14 @@ namespace JabbR.Client
             {
                 _chat.On<User, string>(ClientEvents.OwnerRemoved, (user, room) =>
                 {
-                    ExecuteWithSyncContext(() => ownerRemoved(user, room));
+                    Execute(() => ownerRemoved(user, room));
                 });
             }
         }
 
-        private static void ExecuteWithSyncContext(Action action)
+        private static void Execute(Action action)
         {
-            // Store the current sync context so we call the user code 
-            // where it was meant to be raised
-            var syncContext = SynchronizationContext.Current;
-            Task.Factory.StartNew(() =>
-            {
-                if (syncContext != null)
-                {
-                    syncContext.Post(_ => action(), null);
-                }
-                else
-                {
-                    action();
-                }
-            })
-            .Catch();
+            Task.Factory.StartNew(() => action()).Catch();
         }
 
         private Task SendCommand(string command, params object[] args)
