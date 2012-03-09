@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using JabbR.Client.Models;
 using SignalR.Client.Hubs;
+using SignalR.Client.Transports;
 
 namespace JabbR.Client
 {
@@ -12,14 +13,20 @@ namespace JabbR.Client
     {
         private readonly IHubProxy _chat;
         private readonly HubConnection _connection;
+        private readonly IClientTransport _clientTransport;
         private readonly string _url;
         private int _initialized;
 
         public JabbRClient(string url)
+            : this(url, null)
+        {}
+
+        public JabbRClient(string url, IClientTransport transport)
         {
             _url = url;
             _connection = new HubConnection(url);
             _chat = _connection.CreateProxy("JabbR.Chat");
+            _clientTransport = transport ?? new AutoTransport();
         }
 
         public event Action<Message, string> MessageReceived;
@@ -29,9 +36,17 @@ namespace JabbR.Client
         public event Action<string> Kicked;
         public event Action<string, string, string> PrivateMessage;
         public event Action<User, string> UserTyping;
+        public event Action<User, string> GravatarChanged;
+        public event Action<string, string, string> MeMessageReceived;
+        public event Action<string, User, string> UsernameChanged;
+        public event Action<User, string> NoteChanged;
+        public event Action<User, string> FlagChanged;
+        public event Action<Room> TopicChanged;
+        public event Action<User, string> OwnerAdded;
+        public event Action<User, string> OwnerRemoved;
 
         // Global
-        public event Action<string, int> RoomCountChanged;
+        public event Action<Room, int> RoomCountChanged;
         public event Action<User> UserActivityChanged;
         public event Action<IEnumerable<User>> UsersInactive;
 
@@ -63,33 +78,33 @@ namespace JabbR.Client
         {
             _chat["id"] = userId;
 
-            return DoConnect(() => _connection.Start()
-                                              .Then(() => _chat.Invoke<bool>("Join")
-                                                               .Then(success =>
-                                                               {
-                                                                   if (!success)
-                                                                   {
-                                                                       throw new InvalidOperationException("Unknown user id.");
-                                                                   }
-                                                                   return TaskAsyncHelper.Empty;
-                                                               }).FastUnwrap()).FastUnwrap());
+            return DoConnect(() => _connection.Start(_clientTransport)
+                                       .Then(() => _chat.Invoke<bool>("Join")
+                                                       .Then(success =>
+                                                       {
+                                                           if (!success)
+                                                           {
+                                                               throw new InvalidOperationException("Unknown user id.");
+                                                           }
+                                                           return TaskAsyncHelper.Empty;
+                                                       }).FastUnwrap()).FastUnwrap());
         }
 
         public Task<LogOnInfo> Connect(string name, string password)
         {
-            return DoConnect(() => _connection.Start()
-                                              .Then(() =>
-                                              {
-                                                  return _chat.Invoke<bool>("Join").Then(success =>
-                                                  {
-                                                      if (!success)
-                                                      {
-                                                          return SendCommand("nick {0} {1}", name, password);
-                                                      }
-                                                      return TaskAsyncHelper.Empty;
-                                                  }).FastUnwrap();
+            return DoConnect(() => _connection.Start(_clientTransport)
+                                       .Then(() =>
+                                       {
+                                           return _chat.Invoke<bool>("Join").Then(success =>
+                                           {
+                                               if (!success)
+                                               {
+                                                   return SendCommand("nick {0} {1}", name, password);
+                                               }
+                                               return TaskAsyncHelper.Empty;
+                                           }).FastUnwrap();
 
-                                              }).FastUnwrap());
+                                       }).FastUnwrap());
         }
 
         private Task<LogOnInfo> DoConnect(Func<Task> connect)
@@ -288,11 +303,11 @@ namespace JabbR.Client
                 });
             }
 
-            Action<string, int> roomCountChanged = RoomCountChanged;
+            Action<Room, int> roomCountChanged = RoomCountChanged;
 
             if (roomCountChanged != null)
             {
-                _chat.On<string, int>(ClientEvents.UpdateRoomCount, (room, count) =>
+                _chat.On<Room, int>(ClientEvents.UpdateRoomCount, (room, count) =>
                 {
                     ExecuteWithSyncContext(() => roomCountChanged(room, count));
                 });
@@ -335,6 +350,86 @@ namespace JabbR.Client
                 _chat.On<User, string>(ClientEvents.SetTyping, (user, room) =>
                 {
                     ExecuteWithSyncContext(() => userTyping(user, room));
+                });
+            }
+
+            Action<User, string> gravatarChanged = GravatarChanged;
+
+            if(gravatarChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.GravatarChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => gravatarChanged(user, room));
+                });
+            }
+
+            Action<string, string, string> meMessageReceived = MeMessageReceived;
+
+            if(meMessageReceived != null)
+            {
+                _chat.On<string, string, string>(ClientEvents.MeMessageReceived, (user, content, room) =>
+                {
+                    ExecuteWithSyncContext(() => meMessageReceived(user, content, room));
+                });
+            }
+
+            Action<string, User, string> usernameChanged = UsernameChanged;
+
+            if(usernameChanged != null)
+            {
+                _chat.On<string, User, string>(ClientEvents.UsernameChanged, (oldUserName, user, room) =>
+                {
+                    ExecuteWithSyncContext(() => usernameChanged(oldUserName, user, room));
+                });
+            }
+
+            Action<User, string> noteChanged = NoteChanged;
+
+            if(noteChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                });
+            }
+
+            Action<User, string> flagChanged = FlagChanged;
+
+            if(noteChanged != null)
+            {
+                _chat.On<User, string>(ClientEvents.NoteChanged, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => noteChanged(user, room));
+                });
+            }
+            
+            Action<Room> topicChanged = TopicChanged;
+
+            if (topicChanged != null)
+            {
+                _chat.On<Room>(ClientEvents.TopicChanged, (room) =>
+                {
+                    ExecuteWithSyncContext(() => topicChanged(room));
+                });
+            }
+
+            Action<User, string> ownerAdded = OwnerAdded;
+
+            if (ownerAdded != null)
+            {
+                _chat.On<User, string>(ClientEvents.OwnerAdded, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => ownerAdded(user, room));
+                });
+            }
+
+            Action<User, string> ownerRemoved = OwnerRemoved;
+
+            if (ownerRemoved != null)
+            {
+                _chat.On<User, string>(ClientEvents.OwnerRemoved, (user, room) =>
+                {
+                    ExecuteWithSyncContext(() => ownerRemoved(user, room));
                 });
             }
         }
