@@ -50,6 +50,11 @@ namespace JabbR.Client
         public event Action<User> UserActivityChanged;
         public event Action<IEnumerable<User>> UsersInactive;
 
+        public string SourceUrl
+        {
+            get { return _url; }
+        }
+
         public ICredentials Credentials
         {
             get
